@@ -1,5 +1,4 @@
 use crate::token::*;
-
 use std::iter::FromIterator;
 
 /// 字句分析器
@@ -20,7 +19,13 @@ impl Lexer {
         let tok: Token;
         self.skip_white_space();
         tok = match self.ch {
-            '=' => Token::ASSIGN,
+            '=' => match self.peek_char() {
+                '=' => {
+                    self.read_char();
+                    Token::EQ
+                }
+                _ => Token::ASSIGN,
+            },
             ',' => Token::COMMA,
             ';' => Token::SEMICOLON,
             '+' => Token::PLUS,
@@ -28,7 +33,13 @@ impl Lexer {
             ')' => Token::RPAREN,
             '{' => Token::LBRACE,
             '}' => Token::RBRACE,
-            '!' => Token::BANG,
+            '!' => match self.peek_char() {
+                '=' => {
+                    self.read_char();
+                    Token::NOTEQ
+                }
+                _ => Token::BANG,
+            },
             '-' => Token::MINUS,
             '/' => Token::SLASH,
             '*' => Token::ASTERISK,
@@ -57,6 +68,10 @@ impl Lexer {
         }
         self.position = self.read_position;
         self.read_position += 1;
+    }
+    /// 1文字見る（positionは進めない）
+    fn peek_char(&self) -> char {
+        self.input[self.read_position]
     }
 
     /// 英字判定
@@ -134,7 +149,11 @@ if (5 < 10) {
     return true;
 } else {
     return false;
-}";
+}
+
+10 == 10;
+10 != 9;
+";
     let tests = [
         Token::LET,
         Token::IDENT("five".to_string()),
@@ -201,6 +220,14 @@ if (5 < 10) {
         Token::FALSE,
         Token::SEMICOLON,
         Token::RBRACE,
+        Token::INT(10),
+        Token::EQ,
+        Token::INT(10),
+        Token::SEMICOLON,
+        Token::INT(10),
+        Token::NOTEQ,
+        Token::INT(9),
+        Token::SEMICOLON,
         Token::EOF,
     ];
     let mut lex = new(input);
