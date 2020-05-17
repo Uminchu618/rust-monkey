@@ -28,6 +28,12 @@ impl Lexer {
             ')' => Token::RPAREN,
             '{' => Token::LBRACE,
             '}' => Token::RBRACE,
+            '!' => Token::BANG,
+            '-' => Token::MINUS,
+            '/' => Token::SLASH,
+            '*' => Token::ASTERISK,
+            '<' => Token::LT,
+            '>' => Token::GT,
             '\u{0}' => Token::EOF,
             _ => {
                 if self.is_letter() {
@@ -72,6 +78,11 @@ impl Lexer {
         match &*ident {
             "fn" => Token::FUNCTION,
             "let" => Token::LET,
+            "if" => Token::IF,
+            "else" => Token::ELSE,
+            "return" => Token::RETURN,
+            "true" => Token::TRUE,
+            "false" => Token::FALSE,
             _ => Token::IDENT(ident),
         }
     }
@@ -116,7 +127,14 @@ let add = fn(x,y) {
     x + y;
 };
 let result = add(five, ten);
-";
+!-/*5;
+5 < 10 > 5;
+
+if (5 < 10) {
+    return true;
+} else {
+    return false;
+}";
     let tests = [
         Token::LET,
         Token::IDENT("five".to_string()),
@@ -154,6 +172,35 @@ let result = add(five, ten);
         Token::IDENT("ten".to_string()),
         Token::RPAREN,
         Token::SEMICOLON,
+        Token::BANG,
+        Token::MINUS,
+        Token::SLASH,
+        Token::ASTERISK,
+        Token::INT(5),
+        Token::SEMICOLON,
+        Token::INT(5),
+        Token::LT,
+        Token::INT(10),
+        Token::GT,
+        Token::INT(5),
+        Token::SEMICOLON,
+        Token::IF,
+        Token::LPAREN,
+        Token::INT(5),
+        Token::LT,
+        Token::INT(10),
+        Token::RPAREN,
+        Token::LBRACE,
+        Token::RETURN,
+        Token::TRUE,
+        Token::SEMICOLON,
+        Token::RBRACE,
+        Token::ELSE,
+        Token::LBRACE,
+        Token::RETURN,
+        Token::FALSE,
+        Token::SEMICOLON,
+        Token::RBRACE,
         Token::EOF,
     ];
     let mut lex = new(input);
