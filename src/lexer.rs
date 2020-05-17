@@ -17,7 +17,6 @@ impl Lexer {
     pub fn next_token(&mut self) -> Token {
         let tok: Token;
         tok = match self.ch {
-            // TODO:2回同じ文字を書くのは気に食わない・・・（文字と文字列の違い）
             '=' => Token {
                 ttype: TokenType::ASSIGN,
                 literal: ASSIGN,
@@ -84,53 +83,57 @@ pub fn new(input: &str) -> Lexer {
 
 #[test]
 fn test_next_token() {
-    let input = "=+(){},;";
-    struct ExpectedToken<'a> {
-        expected_ttype: TokenType,
-        expected_literal: &'a str,
-    }
+    let input = r"let five = 5;
+let ten = 10;
+
+let add = fn(x,y) {
+    x + y;
+};
+let result = add(five, ten);
+";
     let tests = [
-        ExpectedToken {
-            expected_ttype: TokenType::ASSIGN,
-            expected_literal: "=",
-        },
-        ExpectedToken {
-            expected_ttype: TokenType::PLUS,
-            expected_literal: "+",
-        },
-        ExpectedToken {
-            expected_ttype: TokenType::LPAREN,
-            expected_literal: "(",
-        },
-        ExpectedToken {
-            expected_ttype: TokenType::RPAREN,
-            expected_literal: ")",
-        },
-        ExpectedToken {
-            expected_ttype: TokenType::LBRACE,
-            expected_literal: "{",
-        },
-        ExpectedToken {
-            expected_ttype: TokenType::RBRACE,
-            expected_literal: "}",
-        },
-        ExpectedToken {
-            expected_ttype: TokenType::COMMA,
-            expected_literal: ",",
-        },
-        ExpectedToken {
-            expected_ttype: TokenType::SEMICOLON,
-            expected_literal: ":",
-        },
-        ExpectedToken {
-            expected_ttype: TokenType::EOF,
-            expected_literal: "",
-        },
+        (TokenType::LET, "let"),
+        (TokenType::IDENT, "five"),
+        (TokenType::ASSIGN, "="),
+        (TokenType::INT, "5"),
+        (TokenType::SEMICOLON, ";"),
+        (TokenType::LET, "let"),
+        (TokenType::IDENT, "ten"),
+        (TokenType::ASSIGN, "="),
+        (TokenType::INT, "10"),
+        (TokenType::SEMICOLON, ";"),
+        (TokenType::LET, "let"),
+        (TokenType::IDENT, "add"),
+        (TokenType::ASSIGN, "="),
+        (TokenType::FUNCTION, "fn"),
+        (TokenType::LPAREN, "("),
+        (TokenType::IDENT, "x"),
+        (TokenType::COMMA, ","),
+        (TokenType::IDENT, "y"),
+        (TokenType::RPAREN, ")"),
+        (TokenType::LBRACE, "{"),
+        (TokenType::IDENT, "x"),
+        (TokenType::PLUS, "+"),
+        (TokenType::IDENT, "y"),
+        (TokenType::SEMICOLON, ";"),
+        (TokenType::RBRACE, "}"),
+        (TokenType::SEMICOLON, ";"),
+        (TokenType::LET, "let"),
+        (TokenType::IDENT, "result"),
+        (TokenType::ASSIGN, "="),
+        (TokenType::IDENT, "add"),
+        (TokenType::LPAREN, "("),
+        (TokenType::IDENT, "five"),
+        (TokenType::COMMA, ","),
+        (TokenType::IDENT, "ten"),
+        (TokenType::RPAREN, ")"),
+        (TokenType::SEMICOLON, ";"),
+        (TokenType::EOF, ""),
     ];
     let mut lex = new(input);
     for test in tests.iter() {
         let tok = lex.next_token();
-        assert_eq!(tok.ttype, test.expected_ttype);
-        assert_eq!(tok.literal, test.expected_literal);
+        assert_eq!(tok.ttype, test.0);
+        assert_eq!(tok.literal, test.1);
     }
 }
