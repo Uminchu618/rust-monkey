@@ -1,21 +1,7 @@
-trait Node {
-    fn token_literal();
-}
+pub struct Expression {}
 
-trait Statement: Node {
-    fn statement_node();
-}
-
-trait Expression: Node {
-    fn expression_node();
-}
-
-struct Program {
-   Statements : Box<dyn Statement>,
-}
-
-impl Program {
-    pub fn token_literal() {
-        if p.Statemens.len()
-    }
+#[derive(Debug)]
+pub enum Statement {
+    Let { identifier: String },
+    Error(String),
 }

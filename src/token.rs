@@ -1,4 +1,4 @@
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Token {
     ///トークン文字列が未知
     ILLEGAL(char),

@@ -62,7 +62,7 @@ impl Lexer {
     /// 1文字読み込む
     fn read_char(&mut self) {
         if self.read_position >= self.input.len() {
-            self.ch = 0 as char;
+            self.ch = '\u{0}';
         } else {
             self.ch = self.input[self.read_position];
         }
@@ -119,23 +119,23 @@ impl Lexer {
             self.read_char();
         }
     }
-}
-
-/// 字句解析器の生成
-pub fn new(input: &str) -> Lexer {
-    let mut lex = Lexer {
-        input: input.chars().collect(),
-        position: 0,
-        read_position: 0,
-        ch: 0 as char,
-    };
-    lex.read_char();
-    return lex;
+    /// 字句解析器の生成
+    pub fn new(input: &str) -> Lexer {
+        let mut lex = Lexer {
+            input: input.chars().collect(),
+            position: 0,
+            read_position: 0,
+            ch: 0 as char,
+        };
+        lex.read_char();
+        return lex;
+    }
 }
 
 #[test]
 fn test_next_token() {
-    let input = r"let five = 5;
+    let input = r"
+let five = 5;
 let ten = 10;
 
 let add = fn(x,y) {
@@ -230,7 +230,7 @@ if (5 < 10) {
         Token::SEMICOLON,
         Token::EOF,
     ];
-    let mut lex = new(input);
+    let mut lex = Lexer::new(input);
     for test in tests.iter() {
         let tok = lex.next_token();
         assert_eq!(tok, *test);

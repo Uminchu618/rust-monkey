@@ -1,4 +1,4 @@
-use crate::lexer;
+use crate::lexer::Lexer;
 use crate::token::Token;
 use std::io;
 const PROMPT: &str = "\n>> ";
@@ -12,7 +12,7 @@ pub fn start<R: io::BufRead, W: io::Write>(mut reader: R, mut writer: W) -> io::
             Err(_) => break,
             Ok(_) => (),
         }
-        let mut lex = lexer::new(&line);
+        let mut lex = Lexer::new(&line);
         loop {
             let tok = lex.next_token();
             writer.write(format!("{:?} ", tok).as_bytes())?;
