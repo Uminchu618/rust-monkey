@@ -6,6 +6,7 @@ use std::fmt;
 pub enum Expression {
     Int(i64),
     Ident(String),
+    Boolean(bool),
     Prefix {
         operator: Token,
         right: Box<Expression>,
@@ -32,6 +33,7 @@ impl fmt::Display for Expression {
         match self {
             Expression::Ident(value) => write!(f, "{}", &value),
             Expression::Int(value) => write!(f, "{}", value),
+            Expression::Boolean(value) => write!(f, "{}", value),
             Expression::Prefix { operator, right } => write!(f, "({}{})", operator, right),
             Expression::Infix {
                 operator,

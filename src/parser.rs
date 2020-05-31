@@ -80,19 +80,17 @@ impl<'a> Parser<'a> {
         let ident_name = self.expect_ident()?;
         println!("{:?}", ident_name);
         self.expect_peek(Token::ASSIGN)?;
-        // self.next_token();
+        self.next_token();
         println!("{:?}", Token::ASSIGN);
-        let int = self.expect_int()?;
-        println!("{:?}", int);
+        let ret_val = Ok(Statement::Let{
+            identifier: ident_name,
+            expr: self.parse_expression(&Precedences::Lowest)?,
+        });
         while self.cur_token != Token::SEMICOLON && self.cur_token != Token::EOF {
             self.next_token();
             //とりあえず、、、進める
         }
-        println!("{:?}", self.cur_token);
-        Ok(Statement::Let {
-            identifier: ident_name,
-            expr: Expression::Int(int),
-        })
+        ret_val
     }
 
     fn parse_return_statement(&mut self) -> Result<Statement, String> {
@@ -146,6 +144,8 @@ impl<'a> Parser<'a> {
         let mut left = match &self.cur_token {
             Token::IDENT(ident) => Ok(Expression::Ident(ident.clone())),
             Token::INT(val) => Ok(Expression::Int(val.clone())),
+            Token::FALSE =>  Ok(Expression::Boolean(false)),
+            Token::TRUE =>  Ok(Expression::Boolean(true)),
             Token::BANG | Token::MINUS => Ok(self.parse_prefix_expression()?),
             _ => Err("Unknown token".to_string()),
         }?;
@@ -389,6 +389,10 @@ fn test_operator_precedence_pasing() {
         "5>4==3<4;",
         "5<4!=3>4;",
         "3+4*5==3*1+4*5;",
+        "true",
+        "false",
+        "3>5 == false",
+        "3<5 == true",
     ];
     let test_expr = [
         "((-a)*b)",
@@ -403,8 +407,12 @@ fn test_operator_precedence_pasing() {
         "((5>4)==(3<4))",
         "((5<4)!=(3>4))",
         "((3+(4*5))==((3*1)+(4*5)))",
+        "true",
+        "false",
+        "((3>5)==false)",
+        "((3<5)==true)",
     ];
-
+    assert_eq!(input.len(), test_expr.len());
     for i in 0..input.len() {
         let mut lex = Lexer::new(input[i]);
         let mut parser = Parser::new(&mut lex);
