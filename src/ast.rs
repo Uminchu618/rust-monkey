@@ -7,6 +7,7 @@ pub enum Expression {
     Int(i64),
     Ident(String),
     Boolean(bool),
+    Grouped(Box<Expression>),
     Prefix {
         operator: Token,
         right: Box<Expression>,
@@ -34,6 +35,7 @@ impl fmt::Display for Expression {
             Expression::Ident(value) => write!(f, "{}", &value),
             Expression::Int(value) => write!(f, "{}", value),
             Expression::Boolean(value) => write!(f, "{}", value),
+            Expression::Grouped(value) => write!(f, "{}", value),
             Expression::Prefix { operator, right } => write!(f, "({}{})", operator, right),
             Expression::Infix {
                 operator,

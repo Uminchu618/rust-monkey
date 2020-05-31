@@ -146,6 +146,7 @@ impl<'a> Parser<'a> {
             Token::INT(val) => Ok(Expression::Int(val.clone())),
             Token::FALSE =>  Ok(Expression::Boolean(false)),
             Token::TRUE =>  Ok(Expression::Boolean(true)),
+            Token::LPAREN => Ok(self.parse_grouped_expression()?),
             Token::BANG | Token::MINUS => Ok(self.parse_prefix_expression()?),
             _ => Err("Unknown token".to_string()),
         }?;
@@ -158,6 +159,13 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
+    fn parse_grouped_expression(&mut self) -> Result<Expression, ParseError> {
+        self.next_token();
+        let ret_val = Ok(Expression::Grouped(Box::new(self.parse_expression(&Precedences::Lowest)?) ));
+        self.expect_peek(Token::RPAREN);
+        ret_val
+    }
+
     fn parse_prefix_expression(&mut self) -> Result<Expression, ParseError> {
         let token = self.cur_token.clone();
         self.next_token();
@@ -165,7 +173,7 @@ impl<'a> Parser<'a> {
             operator: token,
             right: Box::new(self.parse_expression(&Precedences::Prefix)?),
         })
-    }
+    }    
 
     fn parse_infix_expression(&mut self, left: Expression) -> Result<Expression, ParseError> {
         let precedence = Precedences::get(&self.cur_token);
@@ -403,6 +411,11 @@ fn test_operator_precedence_pasing() {
         "!true",
         "3>5 == false",
         "3<5 == true",
+        "1+ (2+3)+4",
+        "(5+5)*2",
+        "2/(5+5)",
+        "-(5+5)",
+        "!(true==true)",
     ];
     let test_expr = [
         "((-a)*b)",
@@ -422,6 +435,11 @@ fn test_operator_precedence_pasing() {
         "(!true)",
         "((3>5)==false)",
         "((3<5)==true)",
+        "((1+(2+3))+4)",
+        "((5+5)*2)",
+        "(2/(5+5))",
+        "(-(5+5))",
+        "(!(true==true))",
     ];
     assert_eq!(input.len(), test_expr.len());
     for i in 0..input.len() {
@@ -435,7 +453,7 @@ fn test_operator_precedence_pasing() {
         for stmt in program {
             result_expr.push_str(&stmt.to_string());
         }
-        // println!("{2:} :  {0:?} , {1:?}", result_expr, test_expr[i], i);
+        println!("{2:} :  {0:?} , {1:?}", result_expr, test_expr[i], i);
         assert_eq!(result_expr, test_expr[i]);
     }
 }
