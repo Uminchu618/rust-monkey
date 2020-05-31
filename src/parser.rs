@@ -1,5 +1,4 @@
-use crate::ast::Expression;
-use crate::ast::Statement;
+use crate::ast::{Expression, Statement};
 use crate::lexer::Lexer;
 use crate::token::Token;
 
@@ -10,6 +9,28 @@ struct Parser<'a> {
     cur_token: Token,
     peek_token: Token,
     errors: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Eq, Hash, Clone)]
+enum Precedences {
+    Lowest,
+    Equals,
+    LessGreater,
+    Sum,
+    Product,
+    Prefix,
+}
+
+impl Precedences {
+    fn get(token: &Token) -> Precedences {
+        match token {
+            Token::EQ | Token::NOTEQ => Precedences::Equals,
+            Token::LT | Token::GT => Precedences::LessGreater,
+            Token::PLUS | Token::MINUS => Precedences::Sum,
+            Token::ASTERISK | Token::SLASH => Precedences::Product,
+            _ => Precedences::Lowest,
+        }
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -34,14 +55,20 @@ impl<'a> Parser<'a> {
         while self.cur_token != Token::EOF {
             match self.parse_statement() {
                 Ok(statement) => statements.push(statement),
-                Err(error) => self.errors.push(error),
+                Err(error) => {
+                    while self.cur_token != Token::SEMICOLON && self.cur_token != Token::EOF {
+                        self.next_token();
+                        //とりあえず、、、進める
+                    }
+                    self.errors.push(error)
+                }
             }
             self.next_token();
         }
         return statements;
     }
 
-    fn parse_statement(&mut self) -> Result<Statement, String> {
+    fn parse_statement(&mut self) -> Result<Statement, ParseError> {
         match self.cur_token {
             Token::LET => self.parse_let_statement(),
             Token::RETURN => self.parse_return_statement(),
@@ -49,17 +76,19 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_let_statement(&mut self) -> Result<Statement, String> {
+    fn parse_let_statement(&mut self) -> Result<Statement, ParseError> {
         let ident_name = self.expect_ident()?;
-        println!("{}", ident_name);
+        println!("{:?}", ident_name);
         self.expect_peek(Token::ASSIGN)?;
         // self.next_token();
+        println!("{:?}", Token::ASSIGN);
         let int = self.expect_int()?;
-        println!("{}", int);
+        println!("{:?}", int);
         while self.cur_token != Token::SEMICOLON && self.cur_token != Token::EOF {
             self.next_token();
             //とりあえず、、、進める
         }
+        println!("{:?}", self.cur_token);
         Ok(Statement::Let {
             identifier: ident_name,
             expr: Expression::Int(int),
@@ -67,15 +96,19 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_return_statement(&mut self) -> Result<Statement, String> {
+        self.next_token();
+        let ret_val = Ok(Statement::Return(
+            self.parse_expression(&Precedences::Lowest)?,
+        ));
         while self.cur_token != Token::SEMICOLON && self.cur_token != Token::EOF {
             self.next_token();
             //とりあえず、、、進める
         }
-        Ok(Statement::Return)
+        return ret_val;
     }
 
-    fn parse_expr_statement(&mut self) -> Result<Statement, String> {
-        let expr = self.parse_expression()?;
+    fn parse_expr_statement(&mut self) -> Result<Statement, ParseError> {
+        let expr = self.parse_expression(&Precedences::Lowest)?;
         if self.cur_token != Token::SEMICOLON {
             self.next_token();
         }
@@ -109,11 +142,40 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expression(&mut self) -> Result<Expression, ParseError> {
-        match &self.cur_token {
+    fn parse_expression(&mut self, precedence: &Precedences) -> Result<Expression, ParseError> {
+        let mut left = match &self.cur_token {
             Token::IDENT(ident) => Ok(Expression::Ident(ident.clone())),
+            Token::INT(val) => Ok(Expression::Int(val.clone())),
+            Token::BANG | Token::MINUS => Ok(self.parse_prefix_expression()?),
             _ => Err("Unknown token".to_string()),
+        }?;
+        while !self.peek_token_is(&Token::SEMICOLON)
+            && precedence < &Precedences::get(&self.peek_token)
+        {
+            self.next_token();
+            left = self.parse_infix_expression(left)?;
         }
+        Ok(left)
+    }
+
+    fn parse_prefix_expression(&mut self) -> Result<Expression, ParseError> {
+        let token = self.cur_token.clone();
+        self.next_token();
+        Ok(Expression::Prefix {
+            operator: token,
+            right: Box::new(self.parse_expression(&Precedences::Prefix)?),
+        })
+    }
+
+    fn parse_infix_expression(&mut self, left: Expression) -> Result<Expression, ParseError> {
+        let precedence = Precedences::get(&self.cur_token);
+        let token = self.cur_token.clone();
+        self.next_token();
+        Ok(Expression::Infix {
+            left: Box::new(left),
+            operator: token,
+            right: Box::new(self.parse_expression(&precedence)?),
+        })
     }
 
     fn expect_ident(&mut self) -> Result<String, ParseError> {
@@ -180,6 +242,7 @@ return 838383;
     let mut parser = Parser::new(&mut lex);
     let program = parser.parse_program();
     assert_eq!(program.len(), 3);
+    assert_eq!(parser.errors.len(), 0);
 }
 
 #[test]
@@ -192,7 +255,10 @@ let  838383;
     let mut lex = Lexer::new(input);
     let mut parser = Parser::new(&mut lex);
     let program = parser.parse_program();
+    parser.print_error();
+    println!("{:?}", program);
     assert_eq!(program.len(), 0);
+    assert_eq!(parser.errors.len(), 3);
     parser.print_error();
 }
 
@@ -209,4 +275,148 @@ fn test_identifier_expression() {
         program[0],
         Statement::Expr(Expression::Ident("foobar".to_string()))
     );
+}
+
+#[test]
+fn test_int_literal_expression() {
+    let input = r"5;";
+    let mut lex = Lexer::new(input);
+    let mut parser = Parser::new(&mut lex);
+    let program = parser.parse_program();
+    parser.print_error();
+    assert_eq!(program.len(), 1);
+    assert_eq!(parser.errors.len(), 0);
+    assert_eq!(program[0], Statement::Expr(Expression::Int(5)));
+}
+
+#[test]
+fn test_prefix_expression() {
+    let input = ["!5;", "-15;"];
+    let test_expr = [
+        Statement::Expr(Expression::Prefix {
+            operator: Token::BANG,
+            right: Box::new(Expression::Int(5)),
+        }),
+        Statement::Expr(Expression::Prefix {
+            operator: Token::MINUS,
+            right: Box::new(Expression::Int(15)),
+        }),
+    ];
+
+    for i in 0..2 {
+        let mut lex = Lexer::new(input[i]);
+        let mut parser = Parser::new(&mut lex);
+        let program = parser.parse_program();
+        parser.print_error();
+        assert_eq!(program.len(), 1);
+        assert_eq!(parser.errors.len(), 0);
+        assert_eq!(program[0], test_expr[i]);
+    }
+}
+
+#[test]
+fn test_infix_expression() {
+    let input = [
+        "5 + 5;", "5 - 5;", "5 * 5;", "5 / 5;", "5 < 5;", "5 > 5;", "5 == 5;", "5 != 5;",
+    ];
+    let test_expr = [
+        Statement::Expr(Expression::Infix {
+            operator: Token::PLUS,
+            left: Box::new(Expression::Int(5)),
+            right: Box::new(Expression::Int(5)),
+        }),
+        Statement::Expr(Expression::Infix {
+            operator: Token::MINUS,
+            left: Box::new(Expression::Int(5)),
+            right: Box::new(Expression::Int(5)),
+        }),
+        Statement::Expr(Expression::Infix {
+            operator: Token::ASTERISK,
+            left: Box::new(Expression::Int(5)),
+            right: Box::new(Expression::Int(5)),
+        }),
+        Statement::Expr(Expression::Infix {
+            operator: Token::SLASH,
+            left: Box::new(Expression::Int(5)),
+            right: Box::new(Expression::Int(5)),
+        }),
+        Statement::Expr(Expression::Infix {
+            operator: Token::LT,
+            left: Box::new(Expression::Int(5)),
+            right: Box::new(Expression::Int(5)),
+        }),
+        Statement::Expr(Expression::Infix {
+            operator: Token::GT,
+            left: Box::new(Expression::Int(5)),
+            right: Box::new(Expression::Int(5)),
+        }),
+        Statement::Expr(Expression::Infix {
+            operator: Token::EQ,
+            left: Box::new(Expression::Int(5)),
+            right: Box::new(Expression::Int(5)),
+        }),
+        Statement::Expr(Expression::Infix {
+            operator: Token::NOTEQ,
+            left: Box::new(Expression::Int(5)),
+            right: Box::new(Expression::Int(5)),
+        }),
+    ];
+
+    for i in 0..8 {
+        let mut lex = Lexer::new(input[i]);
+        let mut parser = Parser::new(&mut lex);
+        let program = parser.parse_program();
+        parser.print_error();
+        println!("{:?}", program);
+        assert_eq!(program.len(), 1);
+        assert_eq!(parser.errors.len(), 0);
+        assert_eq!(program[0], test_expr[i]);
+    }
+}
+
+#[test]
+fn test_operator_precedence_pasing() {
+    let input = [
+        "-a * b;",
+        "!-a;",
+        "a+b+c;",
+        "a+b-c;",
+        "a*b*c;",
+        "a*b/c",
+        "a+b/c;",
+        "a+b*c+d/e-f;",
+        "3+4;-5*5;",
+        "5>4==3<4;",
+        "5<4!=3>4;",
+        "3+4*5==3*1+4*5;",
+    ];
+    let test_expr = [
+        "((-a)*b)",
+        "(!(-a))",
+        "((a+b)+c)",
+        "((a+b)-c)",
+        "((a*b)*c)",
+        "((a*b)/c)",
+        "(a+(b/c))",
+        "(((a+(b*c))+(d/e))-f)",
+        "(3+4)((-5)*5)",
+        "((5>4)==(3<4))",
+        "((5<4)!=(3>4))",
+        "((3+(4*5))==((3*1)+(4*5)))",
+    ];
+
+    for i in 0..input.len() {
+        let mut lex = Lexer::new(input[i]);
+        let mut parser = Parser::new(&mut lex);
+        let program = parser.parse_program();
+        parser.print_error();
+        // println!("{:?}", program);
+        assert_eq!(parser.errors.len(), 0);
+        let mut result_expr = String::new();
+        for stmt in program {
+            result_expr.push_str(&stmt.to_string());
+        }
+        // println!("{2:} :  {0:?} , {1:?}", result_expr, test_expr[i], i);
+        assert_eq!(result_expr, test_expr[i]);
+    }
 }
