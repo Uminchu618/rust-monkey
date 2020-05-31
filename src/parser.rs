@@ -291,7 +291,7 @@ fn test_int_literal_expression() {
 
 #[test]
 fn test_prefix_expression() {
-    let input = ["!5;", "-15;"];
+    let input = ["!5;", "-15;","!true;","!false;"];
     let test_expr = [
         Statement::Expr(Expression::Prefix {
             operator: Token::BANG,
@@ -301,9 +301,18 @@ fn test_prefix_expression() {
             operator: Token::MINUS,
             right: Box::new(Expression::Int(15)),
         }),
+        Statement::Expr(Expression::Prefix {
+            operator: Token::BANG,
+            right: Box::new(Expression::Boolean(true)),
+        }),
+        Statement::Expr(Expression::Prefix {
+            operator: Token::BANG,
+            right: Box::new(Expression::Boolean(false)),
+        }),
     ];
 
-    for i in 0..2 {
+    assert_eq!(input.len(), test_expr.len());
+    for i in 0..input.len() {
         let mut lex = Lexer::new(input[i]);
         let mut parser = Parser::new(&mut lex);
         let program = parser.parse_program();
@@ -391,6 +400,7 @@ fn test_operator_precedence_pasing() {
         "3+4*5==3*1+4*5;",
         "true",
         "false",
+        "!true",
         "3>5 == false",
         "3<5 == true",
     ];
@@ -409,6 +419,7 @@ fn test_operator_precedence_pasing() {
         "((3+(4*5))==((3*1)+(4*5)))",
         "true",
         "false",
+        "(!true)",
         "((3>5)==false)",
         "((3<5)==true)",
     ];
