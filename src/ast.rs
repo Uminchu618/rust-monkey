@@ -46,8 +46,8 @@ impl fmt::Display for Expression {
                 consequence,
                 alternative,
             } => match alternative {
-                Some(alt) => write!(f, "If({}){{{}}}else{{{}}}", condition, consequence, alt),
-                None => write!(f, "If({}){{{}}}", condition, consequence),
+                Some(alt) => write!(f, "If{}{{{}}}else{{{}}}", condition, consequence, alt),
+                None => write!(f, "If{}{{{}}}", condition, consequence),
             },
             Expression::Prefix { operator, right } => write!(f, "({}{})", operator, right),
             Expression::Infix {
@@ -57,7 +57,7 @@ impl fmt::Display for Expression {
             } => write!(f, "({}{}{})", left, operator, right),
             Expression::Block(statements) => {
                 for stmt in statements.iter() {
-                    write!(f, "{} ", stmt)?;
+                    write!(f, "{}", stmt)?;
                 }
                 Ok(())
             }

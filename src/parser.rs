@@ -78,19 +78,13 @@ impl<'a> Parser<'a> {
 
     fn parse_let_statement(&mut self) -> Result<Statement, ParseError> {
         let ident_name = self.expect_ident()?;
-        println!("{:?}", ident_name);
         self.expect_peek(Token::ASSIGN)?;
         self.next_token();
-        println!("{:?}", Token::ASSIGN);
         let ret_val = Ok(Statement::Let {
             identifier: ident_name,
             expr: self.parse_expression(&Precedences::Lowest)?,
         });
         self.expect_peek(Token::SEMICOLON)?;
-        // while self.cur_token != Token::SEMICOLON && self.cur_token != Token::EOF {
-        //     self.next_token();
-        //     //とりあえず、、、進める
-        // }
         ret_val
     }
 
@@ -151,7 +145,7 @@ impl<'a> Parser<'a> {
             // Token::LBRACE => Ok(self.parse_block_expression()?),
             Token::BANG | Token::MINUS => Ok(self.parse_prefix_expression()?),
             Token::IF => Ok(self.parse_if_expression()?),
-            _ => Err("Unknown token".to_string()),
+            _ => Err(format!("Unknown token {}", self.cur_token)),
         }?;
         while !self.peek_token_is(&Token::SEMICOLON)
             && precedence < &Precedences::get(&self.peek_token)
@@ -192,27 +186,25 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if_expression(&mut self) -> Result<Expression, ParseError> {
-        // 本ではif'()'必須だったが、とりあえずなしでもOKとして進めてみる
-        println!("parse_if_expression");
+        self.expect_peek(Token::LPAREN)?;
         self.next_token();
         let condition = self.parse_expression(&Precedences::Lowest)?;
-        println!("{:?}",condition);
+        self.expect_peek(Token::RPAREN)?;
         self.expect_peek(Token::LBRACE)?;
         let consequence = self.parse_block_expression()?;
         if self.cur_token == Token::ELSE {
             self.expect_peek(Token::LBRACE)?;
             let alternative = self.parse_block_expression()?;
-            Ok(Expression::If{
-                condition : Box::new(condition),
-                consequence : Box::new(consequence),
-                alternative : Some(Box::new(alternative)),
+            Ok(Expression::If {
+                condition: Box::new(condition),
+                consequence: Box::new(consequence),
+                alternative: Some(Box::new(alternative)),
             })
-        }
-        else{
-            Ok(Expression::If{
-                condition : Box::new(condition),
-                consequence : Box::new(consequence),
-                alternative : None,
+        } else {
+            Ok(Expression::If {
+                condition: Box::new(condition),
+                consequence: Box::new(consequence),
+                alternative: None,
             })
         }
     }
@@ -231,8 +223,8 @@ impl<'a> Parser<'a> {
                     self.errors.push(error)
                 }
             }
-            self.next_token();
         }
+        self.next_token();
         Ok(Expression::Block(statements))
     }
 
@@ -484,7 +476,6 @@ fn test_operator_precedence_pasing() {
         let mut parser = Parser::new(&mut lex);
         let program = parser.parse_program();
         parser.print_error();
-        // println!("{:?}", program);
         assert_eq!(parser.errors.len(), 0);
         let mut result_expr = String::new();
         for stmt in program {
@@ -497,28 +488,16 @@ fn test_operator_precedence_pasing() {
 
 #[test]
 fn test_if_expression() {
-    let input = ["if (x < y) { x }"];
-    let test_expr = [Statement::Expr(Expression::If {
-        condition: Box::new(Expression::Grouped(Box::new(Expression::Infix {
-            operator: Token::LT,
-            left: Box::new(Expression::Ident("x".to_string())),
-            right: Box::new(Expression::Ident("y".to_string())),
-        }))),
-        consequence: Box::new(Expression::Block(vec![Statement::Expr(Expression::Ident(
-            "x".to_string(),
-        ))])),
-        alternative: None,
-    })];
-
+    let input = ["if (x < y) { x }", "if (x < y) { x } else { y }"];
+    let test_expr = ["If(x<y){x}", "If(x<y){x}else{y}"];
     assert_eq!(input.len(), test_expr.len());
     for i in 0..input.len() {
         let mut lex = Lexer::new(input[i]);
         let mut parser = Parser::new(&mut lex);
         let program = parser.parse_program();
         parser.print_error();
-        println!("{:?}", program);
         assert_eq!(program.len(), 1);
         assert_eq!(parser.errors.len(), 0);
-        assert_eq!(program[0], test_expr[i]);
+        assert_eq!(program[0].to_string(), test_expr[i]);
     }
 }
