@@ -4,7 +4,7 @@ use crate::token::Token;
 
 type ParseError = String;
 
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: &'a mut Lexer,
     cur_token: Token,
     peek_token: Token,
@@ -82,14 +82,15 @@ impl<'a> Parser<'a> {
         self.expect_peek(Token::ASSIGN)?;
         self.next_token();
         println!("{:?}", Token::ASSIGN);
-        let ret_val = Ok(Statement::Let{
+        let ret_val = Ok(Statement::Let {
             identifier: ident_name,
             expr: self.parse_expression(&Precedences::Lowest)?,
         });
-        while self.cur_token != Token::SEMICOLON && self.cur_token != Token::EOF {
-            self.next_token();
-            //とりあえず、、、進める
-        }
+        self.expect_peek(Token::SEMICOLON)?;
+        // while self.cur_token != Token::SEMICOLON && self.cur_token != Token::EOF {
+        //     self.next_token();
+        //     //とりあえず、、、進める
+        // }
         ret_val
     }
 
@@ -144,10 +145,12 @@ impl<'a> Parser<'a> {
         let mut left = match &self.cur_token {
             Token::IDENT(ident) => Ok(Expression::Ident(ident.clone())),
             Token::INT(val) => Ok(Expression::Int(val.clone())),
-            Token::FALSE =>  Ok(Expression::Boolean(false)),
-            Token::TRUE =>  Ok(Expression::Boolean(true)),
+            Token::FALSE => Ok(Expression::Boolean(false)),
+            Token::TRUE => Ok(Expression::Boolean(true)),
             Token::LPAREN => Ok(self.parse_grouped_expression()?),
+            // Token::LBRACE => Ok(self.parse_block_expression()?),
             Token::BANG | Token::MINUS => Ok(self.parse_prefix_expression()?),
+            Token::IF => Ok(self.parse_if_expression()?),
             _ => Err("Unknown token".to_string()),
         }?;
         while !self.peek_token_is(&Token::SEMICOLON)
@@ -161,8 +164,10 @@ impl<'a> Parser<'a> {
 
     fn parse_grouped_expression(&mut self) -> Result<Expression, ParseError> {
         self.next_token();
-        let ret_val = Ok(Expression::Grouped(Box::new(self.parse_expression(&Precedences::Lowest)?) ));
-        self.expect_peek(Token::RPAREN);
+        let ret_val = Ok(Expression::Grouped(Box::new(
+            self.parse_expression(&Precedences::Lowest)?,
+        )));
+        self.expect_peek(Token::RPAREN)?;
         ret_val
     }
 
@@ -173,7 +178,7 @@ impl<'a> Parser<'a> {
             operator: token,
             right: Box::new(self.parse_expression(&Precedences::Prefix)?),
         })
-    }    
+    }
 
     fn parse_infix_expression(&mut self, left: Expression) -> Result<Expression, ParseError> {
         let precedence = Precedences::get(&self.cur_token);
@@ -184,6 +189,51 @@ impl<'a> Parser<'a> {
             operator: token,
             right: Box::new(self.parse_expression(&precedence)?),
         })
+    }
+
+    fn parse_if_expression(&mut self) -> Result<Expression, ParseError> {
+        // 本ではif'()'必須だったが、とりあえずなしでもOKとして進めてみる
+        println!("parse_if_expression");
+        self.next_token();
+        let condition = self.parse_expression(&Precedences::Lowest)?;
+        println!("{:?}",condition);
+        self.expect_peek(Token::LBRACE)?;
+        let consequence = self.parse_block_expression()?;
+        if self.cur_token == Token::ELSE {
+            self.expect_peek(Token::LBRACE)?;
+            let alternative = self.parse_block_expression()?;
+            Ok(Expression::If{
+                condition : Box::new(condition),
+                consequence : Box::new(consequence),
+                alternative : Some(Box::new(alternative)),
+            })
+        }
+        else{
+            Ok(Expression::If{
+                condition : Box::new(condition),
+                consequence : Box::new(consequence),
+                alternative : None,
+            })
+        }
+    }
+
+    fn parse_block_expression(&mut self) -> Result<Expression, ParseError> {
+        let mut statements: Vec<Statement> = Vec::new();
+        while self.cur_token != Token::RBRACE && self.cur_token != Token::EOF {
+            self.next_token();
+            match self.parse_statement() {
+                Ok(statement) => statements.push(statement),
+                Err(error) => {
+                    while self.cur_token != Token::RBRACE && self.cur_token != Token::EOF {
+                        self.next_token();
+                        //とりあえず、、、進める
+                    }
+                    self.errors.push(error)
+                }
+            }
+            self.next_token();
+        }
+        Ok(Expression::Block(statements))
     }
 
     fn expect_ident(&mut self) -> Result<String, ParseError> {
@@ -199,20 +249,6 @@ impl<'a> Parser<'a> {
         self.next_token();
         Ok(name)
     }
-
-    fn expect_int(&mut self) -> Result<i64, ParseError> {
-        let val = match &self.peek_token {
-            Token::INT(v) => v.clone(),
-            _ => {
-                return Err(format!(
-                    "expected next token to be INTEGER, got {} instead",
-                    self.peek_token
-                ))
-            }
-        };
-        self.next_token();
-        Ok(val)
-    }
 }
 
 #[test]
@@ -226,6 +262,7 @@ let foobar = 838383;
     let mut parser = Parser::new(&mut lex);
     let program = parser.parse_program();
     parser.print_error();
+    println!("{:?}", program);
     assert_eq!(program.len(), 3);
     let tests: Vec<(&str, i64)> = vec![("x", 5), ("y", 10), ("foobar", 838383)];
     for test_pair in tests.iter().zip(program.iter()) {
@@ -299,7 +336,7 @@ fn test_int_literal_expression() {
 
 #[test]
 fn test_prefix_expression() {
-    let input = ["!5;", "-15;","!true;","!false;"];
+    let input = ["!5;", "-15;", "!true;", "!false;"];
     let test_expr = [
         Statement::Expr(Expression::Prefix {
             operator: Token::BANG,
@@ -455,5 +492,33 @@ fn test_operator_precedence_pasing() {
         }
         println!("{2:} :  {0:?} , {1:?}", result_expr, test_expr[i], i);
         assert_eq!(result_expr, test_expr[i]);
+    }
+}
+
+#[test]
+fn test_if_expression() {
+    let input = ["if (x < y) { x }"];
+    let test_expr = [Statement::Expr(Expression::If {
+        condition: Box::new(Expression::Grouped(Box::new(Expression::Infix {
+            operator: Token::LT,
+            left: Box::new(Expression::Ident("x".to_string())),
+            right: Box::new(Expression::Ident("y".to_string())),
+        }))),
+        consequence: Box::new(Expression::Block(vec![Statement::Expr(Expression::Ident(
+            "x".to_string(),
+        ))])),
+        alternative: None,
+    })];
+
+    assert_eq!(input.len(), test_expr.len());
+    for i in 0..input.len() {
+        let mut lex = Lexer::new(input[i]);
+        let mut parser = Parser::new(&mut lex);
+        let program = parser.parse_program();
+        parser.print_error();
+        println!("{:?}", program);
+        assert_eq!(program.len(), 1);
+        assert_eq!(parser.errors.len(), 0);
+        assert_eq!(program[0], test_expr[i]);
     }
 }

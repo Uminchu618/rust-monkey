@@ -1,6 +1,7 @@
 use crate::lexer::Lexer;
-use crate::token::Token;
 use std::io;
+use crate::parser::Parser;
+
 const PROMPT: &str = "\n>> ";
 
 pub fn start<R: io::BufRead, W: io::Write>(mut reader: R, mut writer: W) -> io::Result<()> {
@@ -13,13 +14,11 @@ pub fn start<R: io::BufRead, W: io::Write>(mut reader: R, mut writer: W) -> io::
             Ok(_) => (),
         }
         let mut lex = Lexer::new(&line);
-        loop {
-            let tok = lex.next_token();
-            writer.write(format!("{:?} ", tok).as_bytes())?;
+        let mut parser = Parser::new(&mut lex);
+        let program = parser.parse_program();
+        for statement in program {
+            writer.write(format!("{:?} ", statement).as_bytes())?;
             writer.flush()?;
-            if tok == Token::EOF {
-                break;
-            }
         }
     }
     Ok(())
