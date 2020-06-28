@@ -22,6 +22,10 @@ pub enum Expression {
         right: Box<Expression>,
     },
     Block(Vec<Statement>),
+    Function {
+        parameters: Vec<String>,
+        body: Box<Expression>
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -61,6 +65,12 @@ impl fmt::Display for Expression {
                 }
                 Ok(())
             }
+            Expression::Function { parameters, body } => write!(
+                f,
+                "fn({}){{{}}}",
+                parameters.join(","),
+                body
+            ),
         }
     }
 }

@@ -116,6 +116,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn cur_token_is(&self, tok: &Token) -> bool {
+        match (&tok, &self.cur_token) {
+            (Token::IDENT(_), Token::IDENT(_)) => true,
+            (Token::INT(_), Token::INT(_)) => true,
+            _ => tok == &self.cur_token,
+        }
+    }
+
     fn expect_peek(&mut self, tok: Token) -> Result<(), ParseError> {
         match self.peek_token_is(&tok) {
             true => {
@@ -129,6 +137,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn expect_cur(&mut self, tok: Token) -> Result<(), ParseError> {
+        match self.cur_token_is(&tok) {
+            true => {
+                self.next_token();
+                Ok(())
+            }
+            false => Err(format!(
+                "expected cur token to be {}, got {} instead",
+                tok, self.cur_token
+            )),
+        }
+    }
+
     pub fn print_error(&self) {
         for i in self.errors.iter() {
             println!("{}", i);
@@ -136,23 +157,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression(&mut self, precedence: &Precedences) -> Result<Expression, ParseError> {
+        println!("left in {:?}",self.cur_token);
         let mut left = match &self.cur_token {
             Token::IDENT(ident) => Ok(Expression::Ident(ident.clone())),
             Token::INT(val) => Ok(Expression::Int(val.clone())),
             Token::FALSE => Ok(Expression::Boolean(false)),
             Token::TRUE => Ok(Expression::Boolean(true)),
             Token::LPAREN => Ok(self.parse_grouped_expression()?),
-            // Token::LBRACE => Ok(self.parse_block_expression()?),
             Token::BANG | Token::MINUS => Ok(self.parse_prefix_expression()?),
             Token::IF => Ok(self.parse_if_expression()?),
-            _ => Err(format!("Unknown token {}", self.cur_token)),
+            Token::FUNCTION => Ok(self.parse_function_expression()?),
+            _ => { println!("parse err"); Err(format!("Parse Expression:Unknown token {}", self.cur_token))},
         }?;
         while !self.peek_token_is(&Token::SEMICOLON)
             && precedence < &Precedences::get(&self.peek_token)
         {
+            println!("right {:?}",self.cur_token);
             self.next_token();
+            println!("right2 {:?}",self.cur_token);
             left = self.parse_infix_expression(left)?;
         }
+        println!("left out {:?}",&left);
         Ok(left)
     }
 
@@ -186,14 +211,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if_expression(&mut self) -> Result<Expression, ParseError> {
-        self.expect_peek(Token::LPAREN)?;
         self.next_token();
+        self.expect_cur(Token::LPAREN)?;
         let condition = self.parse_expression(&Precedences::Lowest)?;
-        self.expect_peek(Token::RPAREN)?;
-        self.expect_peek(Token::LBRACE)?;
+        self.next_token();
+        self.expect_cur(Token::RPAREN)?;
+        self.expect_cur(Token::LBRACE)?;
         let consequence = self.parse_block_expression()?;
         if self.cur_token == Token::ELSE {
-            self.expect_peek(Token::LBRACE)?;
+            self.next_token();
+            self.expect_cur(Token::LBRACE)?;
             let alternative = self.parse_block_expression()?;
             Ok(Expression::If {
                 condition: Box::new(condition),
@@ -212,11 +239,13 @@ impl<'a> Parser<'a> {
     fn parse_block_expression(&mut self) -> Result<Expression, ParseError> {
         let mut statements: Vec<Statement> = Vec::new();
         while self.cur_token != Token::RBRACE && self.cur_token != Token::EOF {
-            self.next_token();
+            println!("1:{:?}",self.cur_token);
+            // self.next_token();
             match self.parse_statement() {
                 Ok(statement) => statements.push(statement),
                 Err(error) => {
                     while self.cur_token != Token::RBRACE && self.cur_token != Token::EOF {
+                        println!("err:{:?}",self.cur_token);
                         self.next_token();
                         //とりあえず、、、進める
                     }
@@ -225,7 +254,36 @@ impl<'a> Parser<'a> {
             }
         }
         self.next_token();
+        println!("2:{:?}",self.cur_token);
         Ok(Expression::Block(statements))
+    }
+
+    fn parse_function_expression(&mut self) -> Result<Expression, ParseError> {
+        let parameters = self.parse_parameters()?;
+        println!("param {:?}",parameters);
+        self.next_token();
+        let body = self.parse_block_expression()?;
+        println!("body {:?}",body);
+        println!("3:{:?}",self.cur_token);
+        Ok(Expression::Function {
+            parameters: parameters,
+            body: Box::new(body),
+        })
+    }
+
+    fn parse_parameters(&mut self) -> Result<Vec<String>, ParseError> {
+        self.expect_peek(Token::LPAREN)?;
+        let mut parameters = vec![];
+        let mut is_first_token = true;
+        while !self.peek_token_is(&Token::RPAREN) {
+            if !is_first_token {
+                self.expect_peek(Token::COMMA)?;
+            }
+            parameters.push(self.expect_ident()?);
+            is_first_token = false;
+        }
+        self.next_token();
+        Ok(parameters)
     }
 
     fn expect_ident(&mut self) -> Result<String, ParseError> {
@@ -490,6 +548,22 @@ fn test_operator_precedence_pasing() {
 fn test_if_expression() {
     let input = ["if (x < y) { x }", "if (x < y) { x } else { y }"];
     let test_expr = ["If(x<y){x}", "If(x<y){x}else{y}"];
+    assert_eq!(input.len(), test_expr.len());
+    for i in 0..input.len() {
+        let mut lex = Lexer::new(input[i]);
+        let mut parser = Parser::new(&mut lex);
+        let program = parser.parse_program();
+        parser.print_error();
+        assert_eq!(program.len(), 1);
+        assert_eq!(parser.errors.len(), 0);
+        assert_eq!(program[0].to_string(), test_expr[i]);
+    }
+}
+
+#[test]
+fn test_function_expression() {
+    let input = ["fn(x, y){ x + y; }"];
+    let test_expr = ["fn(x,y){(x+y);}"];
     assert_eq!(input.len(), test_expr.len());
     for i in 0..input.len() {
         let mut lex = Lexer::new(input[i]);
